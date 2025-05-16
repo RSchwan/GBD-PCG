@@ -762,9 +762,11 @@ void complete_H_blockrow(uint32_t state_size, uint32_t knot_points,
 }
 
 
-template<typename T, uint32_t state_size, uint32_t knot_points>
+template<typename T>
 __global__
 void precondition(
+        const uint32_t state_size,
+        const uint32_t knot_points,
         T *d_S_in,     // always size = 3Nnx^2
         T *d_S_out, // if ORG, d_S_out = d_S_in; if TRANS, size = Nnx + 2Nnx^2, diagonal | off-diagonal blocks
         T *d_T,     // if ORG, d_T == NULL; if TRANS, size = N(nx + 1)nx/2

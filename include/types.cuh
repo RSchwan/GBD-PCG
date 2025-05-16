@@ -17,7 +17,7 @@ struct pcg_config {
     bool chol_or_ldl;   // false -> ldl, true -> chol
 
     int pcg_poly_order; // now supports poly_order = 0, 1, 2
-    T pcg_poly_coeff[PRECOND_POLY_ORDER];
+    T pcg_poly_coeff[2];
 
     pcg_config(T exit_tol = pcg_constants::DEFAULT_EPSILON<T>,
                uint32_t max_iter = pcg_constants::DEFAULT_MAX_PCG_ITER,

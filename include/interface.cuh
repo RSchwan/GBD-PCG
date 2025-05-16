@@ -138,7 +138,7 @@ void constructBlkTriDiagPrecondCooperativeKernel(const uint32_t state_size,
                                                  T *d_H,
                                                  T *d_gamma,
                                                  struct pcg_config<T> *config) {
-    void *precondition_kernel = (void *) precondition<T, STATE_SIZE, KNOT_POINTS>;
+    void *precondition_kernel = (void *) precondition<T>;
     bool use_H = config->pcg_poly_order > 0;
     // the following shall be turned off for speed
     bool gpu_check = checkPreconditionOccupancy<T>(precondition_kernel, config->pcg_block, state_size, knot_points);
@@ -148,6 +148,8 @@ void constructBlkTriDiagPrecondCooperativeKernel(const uint32_t state_size,
     //      2. Device has enough shared memory for the current state_size & knot_points
 
     void *kernelArgs[] = {
+            (void *) &state_size,
+            (void *) &knot_points,
             (void *) &d_S_in,
             (void *) &d_S_out,
             (void *) &d_T,
@@ -304,7 +306,7 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     }
 
 
-    void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
+    void *pcg_kernel = (void *) pcg<T>;
 
     // the following shall be turned off for speed
     bool gpu_check = checkPcgOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points, config->pcg_org_trans,
@@ -315,6 +317,8 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     //      2. Device has enough shared memory for the current state_size & knot_points
 
     void *kernelArgs[] = {
+            (void *) &state_size,
+            (void *) &knot_points,
             (void *) &d_S,
             (void *) &d_Pinv,
             (void *) &d_H,

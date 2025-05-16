@@ -85,9 +85,11 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
 }
 
 
-template<typename T, uint32_t state_size, uint32_t knot_points>
+template<typename T>
 __global__
 void pcg(
+        const uint32_t state_size,
+        const uint32_t knot_points,
         T *d_S,     // if ORG, size = 3Nnx^2; if TRANS, size = Nnx + 2Nnx^2, diagonal | off-diagonal blocks
         T *d_Pinv,  // if ORG, size = 3Nnx^2; if TRANS, size = Nnx + 2Nnx^2, diagonal | off-diagonal blocks
         T *d_H,     // if poly_order == 0, d_H = NULL; if poly_order > 0, size = 3Nnx^2
@@ -231,7 +233,7 @@ void pcg(
 
     // compute norm of d_gamma (entire gamma), use s_eta_new_b & d_eta_new_temp temporarily
     __syncthreads();
-    glass::dot<T, state_size>(s_eta_new_b, s_gamma, s_gamma);
+    glass::dot<T>(s_eta_new_b, state_size, s_gamma, s_gamma);
     if (thread_id == 0) { d_eta_new_temp[block_id] = s_eta_new_b[0]; }
     grid.sync();
     glass::reduce<T>(s_eta_new_b, knot_points, d_eta_new_temp);
@@ -241,7 +243,7 @@ void pcg(
     /* ---------- PCG starts (preparation phase) ----------*/
 
     // r = gamma - S * lambda
-    loadVec_m1bp1<T, state_size, knot_points - 1>(s_lambda, block_id, &d_lambda[block_x_statesize]);
+    loadVec_m1bp1<T>(s_lambda, state_size, knot_points - 1, block_id, &d_lambda[block_x_statesize]);
     __syncthreads();
     if (org_trans) {
         // TRANS
@@ -259,7 +261,7 @@ void pcg(
 
     // r_tilde = Pinv * r
     // load first and last part of s_r from d_r (global memory).
-    loadVec_m1bp1<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
+    loadVec_m1bp1<T>(s_r, state_size, knot_points - 1, block_id, &d_r[block_x_statesize]);
     __syncthreads();
     if (org_trans) {
         // TRANS
@@ -272,8 +274,8 @@ void pcg(
 
     if (poly_order > 0) {
         // r_tilde = (I + a*H + b*H^2 + c*H^3 + ...) * r_tilde
-        I_H_mv<T, state_size, knot_points - 1>(s_r_tilde, s_r_extra, s_v_b, s_H, d_r, poly_coeff, grid, poly_order,
-                                               block_id);
+        I_H_mv<T>(s_r_tilde, s_r_extra, s_v_b, s_H, d_r, poly_coeff, grid, poly_order,
+                  state_size, knot_points - 1, block_id);
     }
 
     // p = r_tilde
@@ -283,7 +285,7 @@ void pcg(
     }
 
     // eta = r * r_tilde
-    glass::dot<T, state_size>(s_eta_new_b, s_r_b, s_r_tilde);
+    glass::dot<T>(s_eta_new_b, state_size, s_r_b, s_r_tilde);
     if (thread_id == 0) { d_eta_new_temp[block_id] = s_eta_new_b[0]; }
     grid.sync();
     glass::reduce<T>(s_eta_new_b, knot_points, d_eta_new_temp);
@@ -295,7 +297,7 @@ void pcg(
     for (iter = 0; iter < max_iter; iter++) {
         // upsilon = S * p
         // load first and last part of s_p from d_p (global memory).
-        loadVec_m1p1<T, state_size, knot_points - 1>(s_p, block_id, &d_p[block_x_statesize]);
+        loadVec_m1p1<T>(s_p, state_size, knot_points - 1, block_id, &d_p[block_x_statesize]);
         __syncthreads();
         if (org_trans) {
             // TRANS
@@ -307,7 +309,7 @@ void pcg(
         __syncthreads();
 
         // alpha = eta / p * upsilon
-        glass::dot<T, state_size>(s_v_b, s_p_b, s_upsilon);
+        glass::dot<T>(s_v_b, state_size, s_p_b, s_upsilon);
         __syncthreads();
         if (thread_id == 0) { d_v_temp[block_id] = s_v_b[0]; }
         grid.sync();
@@ -326,7 +328,7 @@ void pcg(
 
         // r_tilde = Pinv * r
         // load first and last part of s_r from d_r (global memory).
-        loadVec_m1p1<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
+        loadVec_m1p1<T>(s_r, state_size, knot_points - 1, block_id, &d_r[block_x_statesize]);
         __syncthreads();
         if (org_trans) {
             // TRANS
@@ -339,12 +341,12 @@ void pcg(
 
         if (poly_order > 0) {
             // r_tilde = (I + a*H + b*H^2 + c*H^3 + ...) * r_tilde
-            I_H_mv<T, state_size, knot_points - 1>(s_r_tilde, s_r_extra, s_v_b, s_H, d_r, poly_coeff, grid, poly_order,
-                                                   block_id);
+            I_H_mv<T>(s_r_tilde, s_r_extra, s_v_b, s_H, d_r, poly_coeff, grid, poly_order,
+                      state_size, knot_points - 1, block_id);
         }
 
         // eta = r * r_tilde
-        glass::dot<T, state_size>(s_eta_new_b, s_r_b, s_r_tilde);
+        glass::dot<T>(s_eta_new_b, state_size, s_r_b, s_r_tilde);
         __syncthreads();
         if (thread_id == 0) { d_eta_new_temp[block_id] = s_eta_new_b[0]; }
         grid.sync();
@@ -353,7 +355,7 @@ void pcg(
         eta_new = s_eta_new_b[0];
 
         // compute norm of r
-        glass::dot<T, state_size>(s_eta_new_b, s_r_b, s_r_b);
+        glass::dot<T>(s_eta_new_b, state_size, s_r_b, s_r_b);
         __syncthreads();
         if (thread_id == 0) { d_eta_new_temp[block_id] = s_eta_new_b[0]; }
         grid.sync();

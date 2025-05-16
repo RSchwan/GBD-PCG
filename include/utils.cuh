@@ -7,9 +7,11 @@
 
 namespace cgrps = cooperative_groups;
 
-template<typename T, uint32_t block_dim, uint32_t max_block_id>
+template<typename T>
 __device__
 void loadVec_m1bp1(T *s_var,
+                   const uint32_t block_dim,
+                   const uint32_t max_block_id,
                    const uint32_t block_id,
                    T *d_var_b) {
 
@@ -38,9 +40,11 @@ void loadVec_m1bp1(T *s_var,
 }
 
 
-template<typename T, uint32_t block_dim, uint32_t max_block_id>
+template<typename T>
 __device__
 void loadVec_m1p1(T *s_var,
+                  const uint32_t block_dim,
+                  const uint32_t max_block_id,
                   const uint32_t block_id,
                   T *d_var_b) {
 
@@ -64,9 +68,11 @@ void loadVec_m1p1(T *s_var,
     }
 }
 
-template<typename T, uint32_t block_dim, uint32_t max_block_id>
+template<typename T>
 __device__
 void loadVec_m2p2(T *s_var,
+                  const uint32_t block_dim,
+                  const uint32_t max_block_id,
                   const uint32_t block_id,
                   T *d_var_b) {
 
@@ -235,7 +241,7 @@ void blk_tri_mv_spa(T *s_dst,   // size = b_dim
 
 // r_tilde = (I + a*H + b*H^2) * r_tilde
 // only for poly_order > 0
-template<typename T, uint32_t b_dim, uint32_t max_block_id>
+template<typename T>
 __device__
 void I_H_mv(T *s_r_tilde,
             T *s_r_extra,
@@ -245,6 +251,8 @@ void I_H_mv(T *s_r_tilde,
             T *poly_coeff,
             cgrps::grid_group grid,
             int poly_order,
+            uint32_t b_dim,
+            uint32_t max_block_id,
             uint32_t block_id) {
 
     uint32_t block_x_statesize = block_id * b_dim;
@@ -270,7 +278,7 @@ void I_H_mv(T *s_r_tilde,
 
         // r_tilde = H * r_extra
         // load first and last part of s_r_extra from d_r (global memory).
-        loadVec_m2p2<T, b_dim, max_block_id>(s_r_extra, block_id, &d_r[block_x_statesize]);
+        loadVec_m2p2<T>(s_r_extra, b_dim, max_block_id, block_id, &d_r[block_x_statesize]);
         __syncthreads();
         blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, b_dim, max_block_id, block_id);
         __syncthreads();
