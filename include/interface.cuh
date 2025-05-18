@@ -33,7 +33,9 @@ uint32_t solvePCGNew(
         T *h_lambda,
         unsigned stateSize,
         unsigned knotPoints,
-        struct pcg_config<T> *config) {
+        struct pcg_config<T> *config,
+        float *precond_kernel_time,
+        float *pcg_kernel_time) {
 
     const uint32_t states_sq = stateSize * stateSize;
     const uint32_t Nnx_T = stateSize * knotPoints * sizeof(T);
@@ -80,7 +82,7 @@ uint32_t solvePCGNew(
     // construct the preconditioners and save to d_Pinv and d_H
     constructBlkTriDiagPrecondCooperativeKernel(stateSize, knotPoints,
                                                 d_S_in, d_S_out, d_T, d_Pinv, d_H, d_gamma,
-                                                config);
+                                                config, precond_kernel_time);
 
     uint32_t pcg_iters = solvePCGCooperativeKernel(stateSize, knotPoints,
                                                    d_S_out,
@@ -92,7 +94,8 @@ uint32_t solvePCGNew(
                                                    d_p,
                                                    d_v_temp,
                                                    d_eta_new_temp,
-                                                   config);
+                                                   config,
+                                                   pcg_kernel_time);
 
     if (config->pcg_org_trans) {
         // TRANS
@@ -137,7 +140,8 @@ void constructBlkTriDiagPrecondCooperativeKernel(const uint32_t state_size,
                                                  T *d_Pinv,
                                                  T *d_H,
                                                  T *d_gamma,
-                                                 struct pcg_config<T> *config) {
+                                                 struct pcg_config<T> *config,
+                                                 float *kernel_time) {
     void *precondition_kernel = (void *) precondition<T>;
     bool use_H = config->pcg_poly_order > 0;
     // the following shall be turned off for speed
@@ -146,6 +150,12 @@ void constructBlkTriDiagPrecondCooperativeKernel(const uint32_t state_size,
     // gpu_check true means
     //      1. Device supports Cooperative Threads
     //      2. Device has enough shared memory for the current state_size & knot_points
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
 
     void *kernelArgs[] = {
             (void *) &state_size,
@@ -164,6 +174,15 @@ void constructBlkTriDiagPrecondCooperativeKernel(const uint32_t state_size,
 
     gpuErrchk(cudaLaunchCooperativeKernel(precondition_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           precondition_kernel_smem_size));
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(kernel_time, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    printf("[Precondition] kernel time = %f ms\n", *kernel_time);
 //    gpuErrchk(cudaPeekAtLastError());
 
     return;
@@ -293,7 +312,8 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                                    T *d_p,
                                    T *d_v_temp,
                                    T *d_eta_new_temp,
-                                   struct pcg_config<T> *config) {
+                                   struct pcg_config<T> *config,
+                                   float *kernel_time) {
     uint32_t *d_pcg_iters;
     gpuErrchk(cudaMalloc(&d_pcg_iters, sizeof(uint32_t)));
     bool *d_pcg_exit;
@@ -315,6 +335,12 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     // gpu_check true means
     //      1. Device supports Cooperative Threads
     //      2. Device has enough shared memory for the current state_size & knot_points
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
 
     void *kernelArgs[] = {
             (void *) &state_size,
@@ -343,6 +369,15 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
 
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(kernel_time, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    printf("[PCG] kernel time = %f ms\n", *kernel_time);
 //    gpuErrchk(cudaPeekAtLastError());
 
 
