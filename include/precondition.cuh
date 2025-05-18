@@ -800,6 +800,8 @@ void precondition(
                                    s_temp, blockrow);
         }
     }
+
+    cgrps::this_grid().sync();
 }
 
 // only needed when org_trans == true (TRANS)
