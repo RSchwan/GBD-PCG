@@ -777,7 +777,8 @@ void precondition(
         bool chol_or_ldl,
         bool use_H) {
 
-    extern __shared__ T s_temp[];
+    SharedMemory<T> smem;
+    T *s_temp = smem.getPointer();
     for (unsigned blockrow = blockIdx.x; blockrow < knot_points; blockrow += gridDim.x) {
         invert_transform_D_blockrow<T>(state_size, knot_points,
                                        d_S_in, d_S_out, d_Pinv, d_T, d_gamma,
@@ -810,14 +811,15 @@ __global__
 void recover_lambda_kernel(uint32_t state_size, uint32_t knot_points,
                            T *d_T, T *d_lambda) {
 
-    extern __shared__ T s_mem[];
+    SharedMemory<T> smem;
+    T *s_temp = smem.getPointer();
     const uint32_t triangular_state = (state_size + 1) * state_size / 2;
 
     for (unsigned blockrow = blockIdx.x; blockrow < knot_points; blockrow += gridDim.x) {
 
         // shared block memory usage: nx(nx+1)/2 + 2nx
 
-        T *s_Tk = s_mem;
+        T *s_Tk = s_temp;
         T *s_lambda_k = s_Tk + triangular_state;
         T *s_lambdaNew_k = s_lambda_k + state_size;
         T *s_end = s_lambdaNew_k + state_size;
