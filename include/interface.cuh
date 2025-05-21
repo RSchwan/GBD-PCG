@@ -37,6 +37,8 @@ uint32_t solvePCGNew(
         float *precond_kernel_time,
         float *pcg_kernel_time) {
 
+    cudaDeviceSynchronize();
+
     const uint32_t states_sq = stateSize * stateSize;
     const uint32_t Nnx_T = stateSize * knotPoints * sizeof(T);
     const uint32_t Nnx2_T = knotPoints * states_sq * sizeof(T);
@@ -101,6 +103,7 @@ uint32_t solvePCGNew(
         // TRANS
         // need to transform d_lambda back using d_T
         recover_lamdba(stateSize, knotPoints, d_T, d_lambda);
+        cudaDeviceSynchronize();
     }
 
     /* Copy data back */
